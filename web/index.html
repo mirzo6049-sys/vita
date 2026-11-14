@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VITA Crew Health Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: clinical instrument. Fixed side rail, one column of bordered panels, numbers in mono, colour only for status. */
+:root{
+  --bg:#f4f5f7; --surface:#ffffff; --ink:#111922; --ink-2:#3d4854; --muted:#66727f; --line:#dfe3e8; --fill:#eef0f3;
+  --accent:#0b3d91; --accent-ink:#ffffff;
+  --ok:#17794a; --warn:#a86400; --crit:#c0272d;
+  --ok-bg:#e4f3ea; --warn-bg:#fbefd9; --crit-bg:#fbe6e6;
+  --sans:"Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0d1117; --surface:#151b23; --ink:#e7ebf0; --ink-2:#bcc5cf; --muted:#8b96a3; --line:#28313c; --fill:#1c242e;
+    --accent:#7fb0ff; --accent-ink:#06162f;
+    --ok:#4fc28a; --warn:#e3a93c; --crit:#f2777a;
+    --ok-bg:#12301f; --warn-bg:#35280d; --crit-bg:#3a1719;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0d1117; --surface:#151b23; --ink:#e7ebf0; --ink-2:#bcc5cf; --muted:#8b96a3; --line:#28313c; --fill:#1c242e;
+  --accent:#7fb0ff; --accent-ink:#06162f;
+  --ok:#4fc28a; --warn:#e3a93c; --crit:#f2777a;
+  --ok-bg:#12301f; --warn-bg:#35280d; --crit-bg:#3a1719;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%;scroll-padding-top:20px}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+h1,h2,h3{margin:0;text-wrap:balance;font-weight:600}
+h1{font-size:24px;letter-spacing:-.01em}
+h2{font-size:16px}
+h3{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+a{color:var(--accent)}
+.muted{color:var(--muted)} .small{font-size:13px}
+
+.app{display:grid;grid-template-columns:232px minmax(0,1fr);min-height:100%}
+.side{position:sticky;top:0;align-self:start;max-height:100vh;height:100vh;border-right:1px solid var(--line);background:var(--surface);padding:22px 16px;display:flex;flex-direction:column;gap:26px;overflow:auto}
+.brand{display:flex;align-items:center;gap:10px}
+.brand svg{width:30px;height:30px;flex:none}
+.brand b{font-size:17px;letter-spacing:.14em;display:block;line-height:1.1}
+.brand span{font-size:12px;color:var(--muted)}
+nav{display:flex;flex-direction:column;gap:2px}
+nav button{font:inherit;text-align:left;border:0;background:transparent;color:var(--ink-2);padding:8px 10px;border-radius:6px;cursor:pointer;font-weight:500}
+nav button:hover{background:var(--fill);color:var(--ink)}
+.mission{margin-top:auto;border-top:1px solid var(--line);padding-top:14px;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px}
+.mission dt{color:var(--muted)} .mission dd{margin:0;text-align:right;font-family:var(--mono);font-size:12.5px}
+main{padding:28px clamp(16px,3vw,40px) 60px;display:flex;flex-direction:column;gap:18px;max-width:1120px;width:100%}
+.pagehead{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:flex-end;justify-content:space-between}
+.pagehead p{margin:2px 0 0;color:var(--muted)}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.panel>header{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line)}
+.panel>.body{padding:18px;display:flex;flex-direction:column;gap:16px}
+.cols{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:18px}
+
+.tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:4px;white-space:nowrap}
+.tag::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.tag.ok{color:var(--ok);background:var(--ok-bg)} .tag.warn{color:var(--warn);background:var(--warn-bg)} .tag.crit{color:var(--crit);background:var(--crit-bg)}
+.tag.plain{color:var(--muted);background:var(--fill)}
+
+.score{display:flex;align-items:baseline;gap:8px}
+.score b{font-family:var(--mono);font-size:64px;font-weight:500;line-height:1;letter-spacing:-.03em}
+.score span{color:var(--muted);font-family:var(--mono)}
+.scale{position:relative;height:8px;border-radius:4px;display:grid;grid-template-columns:50fr 25fr 25fr;gap:2px}
+.scale i{border-radius:2px}
+.scale i:nth-child(1){background:var(--crit-bg)} .scale i:nth-child(2){background:var(--warn-bg)} .scale i:nth-child(3){background:var(--ok-bg)}
+.scale u{position:absolute;top:-4px;width:3px;height:16px;border-radius:2px;background:var(--ink);transform:translateX(-50%)}
+.scalekey{display:grid;grid-template-columns:50fr 25fr 25fr;font-size:11.5px;color:var(--muted);margin-top:-10px}
+.scalekey span:nth-child(n+2){padding-left:2px}
+
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;text-align:left;padding:0 0 8px}
+td{padding:7px 0;border-top:1px solid var(--line);vertical-align:middle}
+th.r,td.r{text-align:right}
+td.v{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+td.d.flag{color:var(--warn);font-weight:600}
+td.d.bad{color:var(--crit);font-weight:600}
+.tablewrap{overflow-x:auto}
+
+.sysrow{display:grid;grid-template-columns:56px minmax(0,1.5fr) minmax(90px,1fr) 52px 96px;gap:14px;align-items:center;padding:12px 18px;border-top:1px solid var(--line)}
+.sysrow:first-child{border-top:0}
+.thumb{width:56px;height:56px;border-radius:8px;object-fit:cover;background:#0b0f14;display:block}
+.sysrow .name{font-weight:600}
+.sysrow .drv{font-size:13px;color:var(--muted)}
+.sysrow svg.spark{width:100%;height:32px;display:block}
+.sysrow .val{font-family:var(--mono);font-size:22px;font-weight:500;text-align:right}
+.sysrow .st{text-align:right}
+
+ol.acts{list-style:none;margin:0;padding:0;counter-reset:a}
+ol.acts li{counter-increment:a;display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;padding:14px 18px;border-top:1px solid var(--line)}
+ol.acts li:first-child{border-top:0}
+ol.acts li::before{content:counter(a);font-family:var(--mono);font-size:13px;color:var(--muted);width:26px;height:26px;border:1px solid var(--line);border-radius:50%;display:flex;align-items:center;justify-content:center}
+.acts .t{font-weight:600;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.acts .why{font-size:13.5px;color:var(--muted);margin-top:2px}
+.acts .do{margin-top:8px;padding:8px 12px;background:var(--fill);border-radius:6px;font-size:14px}
+.acts .do b{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-right:8px}
+
+button{font:inherit;color:inherit}
+.btn{background:var(--accent);color:var(--accent-ink);border:1px solid var(--accent);border-radius:6px;padding:9px 16px;font-weight:600;cursor:pointer}
+.btn.ghost{background:var(--surface);color:var(--ink);border-color:var(--line)}
+.btn:disabled{opacity:.5;cursor:default}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chip input:focus-visible+span,.seg input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+
+.chain{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.chain i{font-style:normal;border:1px solid var(--line);border-radius:4px;padding:2px 8px}
+.chain i.on{color:var(--ok);border-color:var(--ok);background:var(--ok-bg)}
+#ecg2{width:100%;height:96px;display:block;border-radius:6px;background:var(--fill)}
+.live{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.live div{padding:10px 12px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);margin:0 -1px -1px 0;min-width:0}
+.live span{font-size:12px;color:var(--muted);display:block}
+.live b{font-family:var(--mono);font-size:22px;font-weight:500}
+.live small{font-size:11.5px;color:var(--muted);display:block}
+
+.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:5px 11px;font-size:13px;white-space:nowrap;cursor:pointer;color:var(--ink-2)}
+.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+#chart{width:100%;min-width:300px;height:auto;display:block}
+#chart text{font-family:var(--mono);font-size:11px;fill:var(--muted)}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label,.legend{font-size:12.5px;color:var(--ink-2);font-weight:500}
+.field input{font-family:var(--mono);font-size:15px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);width:100%}
+fieldset{border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;min-width:0}
+.seg{display:flex;gap:4px}.seg label{flex:1}
+.seg input,.chip input{position:absolute;opacity:0;pointer-events:none}
+.seg span{display:block;text-align:center;padding:7px 0;border:1px solid var(--line);border-radius:6px;font-family:var(--mono);cursor:pointer}
+.seg input:checked+span{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip span{display:block;padding:5px 11px;border:1px solid var(--line);border-radius:6px;font-size:13.5px;cursor:pointer}
+.chip input:checked+span{background:var(--crit-bg);color:var(--crit);border-color:var(--crit)}
+#rtpad{border:1px dashed var(--muted);border-radius:8px;min-height:104px;display:flex;align-items:center;justify-content:center;text-align:center;padding:12px;font-weight:600;background:var(--fill);width:100%;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+#rtpad.wait{border-style:solid;color:var(--muted)}
+#rtpad.go{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);border-style:solid;font-size:22px;letter-spacing:.1em}
+textarea{width:100%;min-height:170px;font-family:var(--mono);font-size:12px;background:var(--fill);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:10px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:9px 14px;border-radius:6px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:calc(100% - 32px);z-index:6}
+.toast.show{opacity:1}
+footer{font-size:12.5px;color:var(--muted);max-width:76ch}
+
+@media (max-width:900px){
+  .app{display:block}
+  .side{position:static;height:auto;max-height:none;border-right:0;border-bottom:1px solid var(--line);padding:14px 16px;gap:12px}
+  .mission{margin:0;border:0;padding:0;display:flex;flex-wrap:wrap;gap:4px 14px}
+  .mission dd{text-align:left}
+  nav{position:fixed;left:0;right:0;bottom:0;flex-direction:row;justify-content:space-around;background:var(--surface);border-top:1px solid var(--line);padding:6px 4px;z-index:5}
+  nav button{text-align:center;padding:9px 6px;font-size:13px}
+  nav button.hide-m{display:none}
+  main{padding:18px 14px 90px}
+  .cols,.two{grid-template-columns:1fr}
+  .sysrow{grid-template-columns:48px minmax(0,1fr) 44px 92px;gap:10px;padding:12px 14px}
+  .sysrow svg.spark{display:none}
+  .thumb{width:48px;height:48px}
+  .score b{font-size:54px}
+  .toast{bottom:70px}
+}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="side">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M5 17h5l2.5-6 4 11 3-8 1.5 3H27" fill="none" stroke="var(--accent-ink)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div><b>VITA</b><span>Crew health self-monitor</span></div>
+  </div>
+  <nav id="nav" aria-label="Sections">
+    <button type="button" data-go="sec-status">Overview</button>
+    <button type="button" data-go="sec-sensors">Sensors</button>
+    <button type="button" data-go="sec-actions">Actions</button>
+    <button type="button" data-go="sec-trends">Trends</button>
+    <button type="button" data-go="sec-log">Check-in</button>
+    <button type="button" class="hide-m" data-go="sec-src">Reference data</button>
+  </nav>
+  <dl class="mission">
+    <dt>Mission</dt><dd>Mars transit</dd>
+    <dt>Day</dt><dd id="md">MD 147</dd>
+    <dt>Crew</dt><dd>CDR-1</dd>
+    <dt>Processing</dt><dd>Onboard</dd>
+  </dl>
+</aside>
+
+<main>
+<div class="pagehead" id="sec-status">
+  <div><h1>Overview</h1><p id="sub">Mission day 147. Each value is compared with your own preflight baseline.</p></div>
+  <span class="tag plain" id="datanote">Simulated crew data</span>
+</div>
+
+<div class="cols">
+  <section class="panel" aria-labelledby="h-ready">
+    <header><h2 id="h-ready">Readiness</h2><span id="rdtag"></span></header>
+    <div class="body">
+      <div class="score"><b id="rdnum">65</b><span>/ 100</span></div>
+      <div class="scale" aria-hidden="true"><i></i><i></i><i></i><u id="rdmark"></u></div>
+      <div class="scalekey" aria-hidden="true"><span>Act &lt; 50</span><span>Watch</span><span>Nominal ≥ 75</span></div>
+      <div id="rdtext"></div>
+      <div class="small muted">Mean of five system scores, weighted toward the weakest one.</div>
+    </div>
+  </section>
+  <section class="panel" aria-labelledby="h-vit">
+    <header><h2 id="h-vit">Today against reference</h2><span class="small muted">Preflight baseline or mission norm</span></header>
+    <div class="body"><div class="tablewrap"><table><thead><tr><th>Measure</th><th class="r">Today</th><th class="r">Reference</th><th class="r">Change</th></tr></thead><tbody id="vitals"></tbody></table></div></div>
+  </section>
+</div>
+
+<section class="panel" aria-labelledby="h-sys">
+  <header><h2 id="h-sys">Body systems</h2><span class="small muted">Score 0 to 100, last 14 days</span></header>
+  <div id="systems"></div>
+</section>
+
+<section class="panel" id="sec-sensors" aria-labelledby="h-sen">
+  <header><h2 id="h-sen">Wearable sensors</h2><span class="tag plain" id="senstate">Not connected</span></header>
+  <div class="body">
+    <div class="chain" aria-label="Data path"><i id="c1">Sensor shirt</i>→<i id="c2">Bluetooth LE</i>→<i id="c3">Cabin tablet</i>→<i id="c4">VITA</i></div>
+    <canvas id="ecg2" width="1200" height="192" aria-label="ECG trace from the sensor shirt"></canvas>
+    <div class="live">
+      <div><span>Heart rate</span><b id="s-hr">--</b><small>bpm, chest ECG</small></div>
+      <div><span>Breathing</span><b id="s-br">--</b><small>per min, stretch band</small></div>
+      <div><span>SpO₂</span><b id="s-spo2">--</b><small>%, optical</small></div>
+      <div><span>Skin temperature</span><b id="s-temp">--</b><small>°C, thermistor</small></div>
+      <div><span>Blood pressure</span><b id="s-bp">--</b><small>mmHg, pulse wave</small></div>
+      <div><span>Activity</span><b id="s-act">--</b><small>accelerometer</small></div>
+    </div>
+    <div class="btnrow">
+      <button class="btn" type="button" id="senbtn">Connect sensor shirt</button>
+      <button class="btn ghost" type="button" id="senuse" disabled>Use readings in check-in</button>
+      <span class="small muted" id="senpk">Signal is simulated in this prototype.</span>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="sec-actions" aria-labelledby="h-act">
+  <header><h2 id="h-act">Recommended actions</h2><button class="btn ghost" id="copy" type="button">Copy report for flight surgeon</button></header>
+  <ol class="acts" id="actions"></ol>
+  <div class="body" id="reportwrap" hidden><textarea id="reportbox" readonly aria-label="Report text"></textarea></div>
+</section>
+
+<section class="panel" id="sec-trends" aria-labelledby="h-trend">
+  <header><h2 id="h-trend">30-day trend</h2><span class="small muted" id="trendnote"></span></header>
+  <div class="body"><div class="tabs" id="tabs"></div><div class="tablewrap"><svg id="chart" viewBox="0 0 640 230" role="img" aria-label="Trend chart"></svg></div></div>
+</section>
+
+<section class="panel" id="sec-log" aria-labelledby="h-log">
+  <header><h2 id="h-log">Daily check-in</h2><span class="small muted" id="lognote"></span></header>
+  <div class="body">
+  <form id="form" novalidate>
+    <div class="two">
+      <div class="col">
+        <h3>Vitals</h3>
+        <div class="grid">
+          <div class="field"><label for="f-hr">Resting heart rate, bpm</label><input id="f-hr" type="number" inputmode="numeric" min="30" max="200"></div>
+          <div class="field"><label for="f-sys">Systolic BP, mmHg</label><input id="f-sys" type="number" inputmode="numeric" min="70" max="220"></div>
+          <div class="field"><label for="f-dia">Diastolic BP, mmHg</label><input id="f-dia" type="number" inputmode="numeric" min="40" max="140"></div>
+          <div class="field"><label for="f-spo2">SpO₂, %</label><input id="f-spo2" type="number" inputmode="numeric" min="70" max="100"></div>
+          <div class="field"><label for="f-temp">Body temperature, °C</label><input id="f-temp" type="number" inputmode="decimal" step="0.1" min="34" max="42"></div>
+          <div class="field"><label for="f-mass">Body mass, kg</label><input id="f-mass" type="number" inputmode="decimal" step="0.1" min="30" max="150"></div>
+        </div>
+        <h3>Load and exposure</h3>
+        <div class="grid">
+          <div class="field"><label for="f-sleep">Sleep, hours</label><input id="f-sleep" type="number" inputmode="decimal" step="0.1" min="0" max="14"></div>
+          <div class="field"><label for="f-res">Resistive exercise, min</label><input id="f-res" type="number" inputmode="numeric" min="0" max="240"></div>
+          <div class="field"><label for="f-aer">Aerobic exercise, min</label><input id="f-aer" type="number" inputmode="numeric" min="0" max="240"></div>
+          <div class="field"><label for="f-dose">Dosimeter today, mSv</label><input id="f-dose" type="number" inputmode="decimal" step="0.01" min="0" max="500"></div>
+        </div>
+      </div>
+      <div class="col">
+        <h3>Mind</h3>
+        <fieldset><span class="legend">Mood, 1 low to 5 good</span><div class="seg" id="seg-mood"></div></fieldset>
+        <fieldset><span class="legend">Stress, 1 calm to 5 high</span><div class="seg" id="seg-stress"></div></fieldset>
+        <fieldset><span class="legend">Symptoms today</span><div class="chips" id="chips"></div></fieldset>
+        <h3>Alertness test</h3>
+        <div class="small muted">Five taps. Wait for the pad to change colour, then tap as fast as you can. Reactions slower than your baseline point to fatigue.</div>
+        <button type="button" id="rtpad">Start the test</button>
+        <div class="field"><label for="f-rt">Median reaction time, ms</label><input id="f-rt" type="number" inputmode="numeric" min="100" max="2000"></div>
+      </div>
+    </div>
+    <div class="btnrow" style="margin-top:18px">
+      <button class="btn" type="submit" id="save">Log check-in</button>
+      <button class="btn ghost" type="button" id="reset">Reset sample data</button>
+    </div>
+  </form>
+  </div>
+</section>
+
+<section class="panel" id="sec-src" aria-labelledby="h-src">
+  <header><h2 id="h-src">Reference data</h2><span class="small muted">Published values the scoring is built on</span></header>
+  <div class="body"><div class="tablewrap"><table>
+    <thead><tr><th>Parameter</th><th>Value used</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>Career radiation limit</td><td class="v">600 mSv</td><td><a href="https://www.nasa.gov/wp-content/uploads/2023/03/radiation-protection-technical-brief-ochmo.pdf">NASA-STD-3001, OCHMO radiation brief</a></td></tr>
+      <tr><td>Short-term limit, solar particle event</td><td class="v">250 mSv</td><td><a href="https://www.nasa.gov/wp-content/uploads/2023/03/radiation-protection-technical-brief-ochmo.pdf">NASA-STD-3001, OCHMO radiation brief</a></td></tr>
+      <tr><td>Dose rate in Mars transit</td><td class="v">1.84 mSv/day</td><td><a href="https://www.space.com/23875-mars-radiation-life-manned-mission.html">MSL RAD cruise measurement, reported 2013</a></td></tr>
+      <tr><td>Bone density loss without countermeasures</td><td class="v">1–1.5 % / month</td><td><a href="https://www.nasa.gov/reference/risk-of-spaceflight-induced-bone-changes/">NASA, Risk of Spaceflight-Induced Bone Changes</a></td></tr>
+      <tr><td>Daily exercise on station</td><td class="v">about 2 h</td><td><a href="https://www.nasa.gov/missions/station/iss-research/counteracting-bone-and-muscle-loss-in-microgravity/">NASA, Counteracting Bone and Muscle Loss</a></td></tr>
+      <tr><td>Sleep in flight, scheduled and actual</td><td class="v">8.5 h / 6.09 h</td><td><a href="https://doi.org/10.1016/S1474-4422(14)70122-X">Barger et al., Lancet Neurology, 2014</a></td></tr>
+    </tbody></table></div>
+    <div class="small muted">Crew measurements shown in this prototype are simulated around these values. Score weights are our own and need review by flight medicine.</div>
+  </div>
+</section>
+
+<footer>VITA, team Novacode, NASA Space Apps Challenge 2026, Dushanbe. Research prototype, not a medical device.</footer>
+</main>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function(){
+"use strict";
+var BASE={hr:58,sys:118,dia:76,mass:74.0,rt:265,spo2:98,sleep:8.5};
+var LIMIT=600, TRANSIT=1.84, SPIKE=4.0, PRIOR_DOSE=215.3, KEY="vita-entries-v2";
+var SYMPTOMS=[["headache","Headache"],["congestion","Congestion"],["throat","Sore throat"],["rash","Skin rash"],["vision","Blurred vision"],["back","Back pain"],["nausea","Nausea"]];
+var SYSTEMS=[["cardio","Cardiovascular","Heart rate, blood pressure, SpO₂"],["bone","Bone and muscle","Exercise load, body mass"],["immune","Immune","Sleep, stress, temperature, symptoms"],["mind","Mind and fatigue","Mood, stress, reaction time"],["rad","Radiation","Daily and cumulative dose"]];
+var METRICS=[["sleep","Sleep","h",null,1],["hr","Resting HR","bpm",BASE.hr,0],["res","Resistive","min",null,0],["aer","Aerobic","min",null,0],["mood","Mood","/5",null,0],["stress","Stress","/5",null,0],["rt","Reaction","ms",BASE.rt,0],["dose","Dose","mSv",TRANSIT,2],["mass","Mass","kg",BASE.mass,1],["sys","Systolic","mmHg",BASE.sys,0]];
+var TREFOIL='<svg class="thumb" viewBox="-30 -30 60 60" role="img" aria-label="Radiation"><rect x="-30" y="-30" width="60" height="60" fill="#f2c200"/><g fill="#151515" transform="rotate(90)"><circle r="4"/><path d="M6.06 -3.50L19.05 -11.00A22 22 0 0 1 19.05 11.00L6.06 3.50A7 7 0 0 0 6.06 -3.50Z"/><path d="M6.06 -3.50L19.05 -11.00A22 22 0 0 1 19.05 11.00L6.06 3.50A7 7 0 0 0 6.06 -3.50Z" transform="rotate(120)"/><path d="M6.06 -3.50L19.05 -11.00A22 22 0 0 1 19.05 11.00L6.06 3.50A7 7 0 0 0 6.06 -3.50Z" transform="rotate(240)"/></g></svg>';
+var entries=[], isDemo=true, metric="sleep";
+var $=function(id){return document.getElementById(id)};
+var still=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function demo(){
+  var seed=42; function r(){seed=(seed*1664525+1013904223)%4294967296;return seed/4294967296}
+  function n(m,s){return m+(r()+r()+r()-1.5)*s}
+  var out=[];
+  for(var i=0;i<30;i++){
+    var d=118+i, late=Math.max(0,i-18)/11;
+    out.push({day:d,
+      hr:Math.round(n(58+late*9,1.6)), sys:Math.round(n(118+late*6,3)), dia:Math.round(n(76+late*3,2)),
+      spo2:Math.round(n(97.5,0.6)), temp:+n(36.6,0.15).toFixed(1), mass:+(74-0.02*i-late*0.5+n(0,0.1)).toFixed(1),
+      sleep:+Math.max(4,n(7.3-late*1.6,0.35)).toFixed(1),
+      res:Math.max(0,Math.round(i>24?n(18,8):n(62,7))), aer:Math.max(0,Math.round(n(55,8))),
+      dose:+(d===139?11.5:Math.max(1.2,n(TRANSIT,0.22))).toFixed(2),
+      mood:Math.max(1,Math.min(5,Math.round(n(4.1-late*1.4,0.5)))), stress:Math.max(1,Math.min(5,Math.round(n(1.9+late*1.7,0.5)))),
+      rt:Math.round(n(268+late*48,9)), sym:i===28?["headache"]:(i===29?["headache","congestion"]:[])});
+  }
+  return out;
+}
+function load(){
+  try{var raw=localStorage.getItem(KEY); if(raw){var p=JSON.parse(raw); if(p&&p.entries&&p.entries.length){entries=p.entries;isDemo=!!p.demo;return}}}catch(e){}
+  entries=demo(); isDemo=true;
+}
+function save(){try{localStorage.setItem(KEY,JSON.stringify({entries:entries,demo:isDemo}))}catch(e){}}
+// server storage (PostgreSQL via /api). Falls back to the browser when no server answers.
+var API=null;
+function api(method,body){return fetch("/api/checkins",{method:method,headers:{"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined}).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()})}
+function syncFromServer(){
+  if(typeof fetch!=="function")return;
+  api("GET").then(function(rows){
+    API=true;
+    if(rows.length){entries=rows;isDemo=false}
+    else{api("POST",entries).catch(function(){})}
+    renderAll();fillForm();$("datanote").textContent=(isDemo?"Sample data":"Crew data")+" · saved in database";
+  }).catch(function(){API=false});
+}
+
+function avg(k,i,n){n=n||7;var s=0,c=0;for(var j=Math.max(0,i-n+1);j<=i;j++){s+=entries[j][k];c++}return s/c}
+function pos(x){return x>0?x:0}
+function clamp(x){return Math.max(0,Math.min(100,Math.round(x)))}
+function cumDose(i){var s=PRIOR_DOSE;for(var j=0;j<=i;j++)s+=entries[j].dose;return s}
+function has(e,s){return e.sym.indexOf(s)>=0?1:0}
+function scores(i){
+  var e=entries[i], hr=avg("hr",i), sl=avg("sleep",i), st=avg("stress",i), mo=avg("mood",i), res=avg("res",i), aer=avg("aer",i), rt=avg("rt",i,3);
+  var massLoss=(BASE.mass-avg("mass",i,3))/BASE.mass*100, cum=cumDose(i), spike=0;
+  for(var j=Math.max(0,i-6);j<=i;j++) if(entries[j].dose>SPIKE) spike=1;
+  var s={
+    cardio:clamp(100-3*pos(hr-BASE.hr-3)-1.2*pos(e.sys-130)-1.5*pos(95-e.sys)-1.5*pos(e.dia-85)-8*pos(95-e.spo2)),
+    bone:clamp(100-0.6*pos(60-res)-0.3*pos(40-aer)-8*pos(massLoss-1)-(has(e,"back")?5:0)),
+    immune:clamp(100-12*pos(7-sl)-6*pos(st-2)-25*pos(e.temp-37.5)-8*(has(e,"congestion")+has(e,"throat")+has(e,"rash"))),
+    mind:clamp(100-10*pos(7-sl)-10*pos(3.5-mo)-7*pos(st-2.5)-0.25*pos(rt-BASE.rt-20)-(has(e,"headache")?4:0)),
+    rad:clamp(100-cum/LIMIT*100-(spike?10:0)-(e.dose>SPIKE?15:0))
+  };
+  var v=[s.cardio,s.bone,s.immune,s.mind,s.rad], mean=v.reduce(function(a,b){return a+b},0)/5;
+  s.overall=clamp(0.6*mean+0.4*Math.min.apply(null,v)); s.cum=cum;
+  return s;
+}
+function level(x){return x>=75?"ok":x>=50?"warn":"crit"}
+function word(l){return l==="ok"?"Nominal":l==="warn"?"Watch":"Act"}
+function tag(l){return '<span class="tag '+l+'">'+word(l)+'</span>'}
+
+function actions(i){
+  var e=entries[i], a=[], sl=avg("sleep",i), hr=avg("hr",i), res=avg("res",i), st=avg("stress",i), mo=avg("mood",i), rt=avg("rt",i,3), cum=cumDose(i), pct=(cum/LIMIT*100).toFixed(0);
+  function add(sev,t,why,d){a.push({sev:sev,t:t,why:why,d:d})}
+  if(has(e,"vision")) add("crit","Vision change reported","Blurred vision in microgravity can be an early sign of spaceflight-associated neuro-ocular syndrome.","Run the onboard eye exam today and send the result to the flight surgeon.");
+  if(e.temp>=37.8) add("crit","Fever, "+e.temp.toFixed(1)+" °C","A temperature above 37.8 °C needs attention when immunity is already under load.","Recheck in 2 hours, rest, hydrate, and report to the flight surgeon.");
+  if(e.spo2<94) add("crit","Low oxygen saturation, "+e.spo2+" %","SpO₂ below 94 % can point to a cabin atmosphere or respiratory problem.","Recheck with a second sensor and verify cabin O₂ and CO₂ readings.");
+  if(e.dose>SPIKE) add("crit","Radiation spike today, "+e.dose.toFixed(2)+" mSv","That is "+(e.dose/TRANSIT).toFixed(1)+" times the usual transit rate of 1.84 mSv per day and suggests a solar particle event.","Move to the storm shelter and stay there until the dose rate returns to normal.");
+  if(sl<6.5) add(sl<6?"crit":"warn","Sleep debt, 7-day average "+sl.toFixed(1)+" h","Crews are scheduled 8.5 h and average about 6 h in flight. Short sleep lowers immunity and slows reactions.","Protect a full sleep window tonight. Dim cabin lights 1 hour before and skip caffeine after midday.");
+  if(hr-BASE.hr>5) add(hr-BASE.hr>10?"crit":"warn","Resting heart rate "+Math.round(hr-BASE.hr)+" bpm above baseline","A sustained rise can reflect fatigue, dehydration, stress, or the start of an illness.","Drink 500 ml of water, recheck after 10 minutes of rest, and report if it stays high for 3 more days.");
+  if(res<45) add(res<30?"crit":"warn","Resistive exercise "+Math.round(res)+" min per day, plan is 60","Without loading, bone density falls 1 to 1.5 % per month in microgravity.","Schedule a full resistive session today and book the device for the next 3 days.");
+  if(cum/LIMIT>0.4) add(cum/LIMIT>0.8?"crit":"warn","Cumulative dose at "+pct+" % of career limit","You have received "+cum.toFixed(0)+" of 600 mSv. At the transit rate the limit is about "+Math.max(0,Math.round((LIMIT-cum)/TRANSIT))+" days away.","Sleep and rest in the best-shielded area and review exposure planning with the ground team.");
+  if(rt-BASE.rt>30) add("warn","Reactions "+Math.round(rt-BASE.rt)+" ms slower than baseline","Slower alertness-test results usually follow sleep loss.","Avoid critical manual tasks in the next shift if possible, or ask a crewmate to cross-check.");
+  if(st>3.2||mo<3) add((st>4||mo<2.3)?"crit":"warn","Mood "+mo.toFixed(1)+" of 5, stress "+st.toFixed(1)+" of 5 this week","Isolation and confinement build up slowly. A week-long trend matters more than one bad day.","Book a private family call, take 20 minutes of quiet time today, and consider a behavioural health conference.");
+  if(has(e,"congestion")||has(e,"throat")||has(e,"rash")) add("warn","Possible immune symptoms","Stress and short sleep in flight can reactivate latent viruses and trigger rashes or congestion.","Log symptoms daily, photograph any rash, and report if they last more than 3 days.");
+  var sp=null; for(var j=Math.max(0,i-6);j<i;j++) if(entries[j].dose>SPIKE) sp=entries[j];
+  if(sp&&e.dose<=SPIKE) add("warn","Dose spike on MD "+sp.day+", "+sp.dose.toFixed(2)+" mSv","A solar particle event was recorded this week.","Review the storm-shelter procedure and check space weather alerts.");
+  var rank={crit:0,warn:1,ok:2}; a.sort(function(x,y){return rank[x.sev]-rank[y.sev]});
+  if(!a.length) add("ok","All systems within your normal range","No measure has drifted from your baseline this week.","Keep the current sleep and exercise routine.");
+  return a;
+}
+
+function spark(vals,l){
+  var w=140,h=32,mn=Math.min.apply(null,vals.concat([40])),mx=100,pts=vals.map(function(v,k){return [k/(vals.length-1)*(w-8)+4, h-4-(v-mn)/(mx-mn||1)*(h-8)]});
+  var d=pts.map(function(p,k){return (k?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)}).join(" "), last=pts[pts.length-1];
+  return '<svg class="spark" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none" aria-hidden="true"><path d="'+d+'" fill="none" stroke="var(--muted)" stroke-width="1.5" vector-effect="non-scaling-stroke"/><circle cx="'+last[0]+'" cy="'+last[1]+'" r="3" fill="var(--'+l+')"/></svg>';
+}
+function renderOverview(){
+  var i=entries.length-1, e=entries[i], s=scores(i), l=level(s.overall);
+  $("md").textContent="MD "+e.day;
+  $("sub").textContent="Mission day "+e.day+". Each value is compared with your own preflight baseline.";
+  $("datanote").textContent=isDemo?"Simulated crew data":"Includes your check-ins";
+  $("rdnum").textContent=s.overall; $("rdtag").innerHTML=tag(l); $("rdmark").style.left=s.overall+"%";
+  var weak=SYSTEMS.filter(function(S){return s[S[0]]<75}).map(function(S){return S[1].toLowerCase()});
+  $("rdtext").textContent=weak.length?weak.length+" of 5 systems need attention: "+weak.join(", ")+".":"All five systems are within your normal range.";
+  var rows=[
+    ["Resting heart rate",e.hr,BASE.hr,"bpm",0,function(d){return d>10?"bad":d>5?"flag":""}],
+    ["Systolic pressure",e.sys,BASE.sys,"mmHg",0,function(d){return Math.abs(d)>20?"bad":Math.abs(d)>12?"flag":""}],
+    ["Diastolic pressure",e.dia,BASE.dia,"mmHg",0,function(d){return Math.abs(d)>12?"bad":Math.abs(d)>8?"flag":""}],
+    ["SpO₂",e.spo2,BASE.spo2,"%",0,function(d){return d<-4?"bad":d<-2?"flag":""}],
+    ["Sleep last night",e.sleep,BASE.sleep,"h",1,function(d){return d<-2.5?"bad":d<-1.5?"flag":""}],
+    ["Reaction time",e.rt,BASE.rt,"ms",0,function(d){return d>60?"bad":d>30?"flag":""}],
+    ["Body mass",e.mass,BASE.mass,"kg",1,function(d){return d<-2?"bad":d<-0.75?"flag":""}],
+    ["Radiation dose today",e.dose,TRANSIT,"mSv",2,function(d){return d>SPIKE-TRANSIT?"bad":d>0.6?"flag":""}]];
+  $("vitals").innerHTML=rows.map(function(r){var d=r[1]-r[2];
+    return '<tr><td>'+r[0]+'</td><td class="v r">'+r[1].toFixed(r[4])+' '+r[3]+'</td><td class="v r muted">'+r[2].toFixed(r[4])+'</td><td class="v r d '+r[5](d)+'">'+(d>0?"+":d<0?"−":"")+Math.abs(d).toFixed(r[4])+'</td></tr>'}).join("");
+  var hist=[]; for(var j=Math.max(0,i-13);j<=i;j++) hist.push(scores(j));
+  $("systems").innerHTML=SYSTEMS.map(function(S){
+    var v=s[S[0]], lv=level(v), extra=S[0]==="rad"?'. Total '+s.cum.toFixed(0)+' of 600 mSv':'';
+    var media=S[0]==="rad"?TREFOIL:'<video class="thumb" src="media/'+S[0]+'.mp4" poster="media/'+S[0]+'.jpg" autoplay muted loop playsinline preload="metadata" aria-hidden="true"></video>';
+    return '<div class="sysrow">'+media+'<div><div class="name">'+S[1]+'</div><div class="drv">'+S[2]+extra+'</div></div>'+spark(hist.map(function(h){return h[S[0]]}),lv)+'<div class="val">'+v+'</div><div class="st">'+tag(lv)+'</div></div>';
+  }).join("");
+  if(document.querySelectorAll)[].forEach.call(document.querySelectorAll("video.thumb"),function(v){v.muted=true;if(!still){var p=v.play();if(p&&p.catch)p.catch(function(){})}});
+  $("lognote").textContent="Next entry is MD "+(e.day+1);
+}
+function renderActions(){
+  $("actions").innerHTML=actions(entries.length-1).map(function(a){
+    return '<li><div><div class="t">'+a.t+' '+tag(a.sev)+'</div><div class="why">'+a.why+'</div><div class="do"><b>Action</b>'+a.d+'</div></div></li>';
+  }).join("");
+}
+function renderTabs(){$("tabs").innerHTML=METRICS.map(function(m){return '<button type="button" data-m="'+m[0]+'" aria-pressed="'+(m[0]===metric)+'">'+m[1]+'</button>'}).join("")}
+function renderChart(){
+  var m=METRICS.filter(function(x){return x[0]===metric})[0], data=entries.slice(-30), vals=data.map(function(e){return e[m[0]]});
+  var W=640,H=230,L=46,R=64,T=14,B=28, mn=Math.min.apply(null,vals), mx=Math.max.apply(null,vals);
+  if(m[3]!==null){mn=Math.min(mn,m[3]);mx=Math.max(mx,m[3])}
+  var pad=(mx-mn)*0.12||1; mn-=pad; mx+=pad; if(mn<0)mn=0;
+  function X(k){return L+k/(vals.length-1||1)*(W-L-R)} function Y(v){return T+(1-(v-mn)/(mx-mn))*(H-T-B)}
+  var f=function(v){return v.toFixed(m[4])}, g="";
+  [0,0.5,1].forEach(function(t){var v=mn+(mx-mn)*t,y=Y(v);g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="var(--line)"/><text x="'+(L-6)+'" y="'+(y+4)+'" text-anchor="end">'+f(v)+'</text>'});
+  var line=vals.map(function(v,k){return (k?"L":"M")+X(k).toFixed(1)+" "+Y(v).toFixed(1)}).join(" ");
+  var area=line+" L"+X(vals.length-1).toFixed(1)+" "+(H-B)+" L"+L+" "+(H-B)+" Z";
+  var base=m[3]!==null?'<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(m[3])+'" y2="'+Y(m[3])+'" stroke="var(--muted)" stroke-dasharray="4 4"/><text x="'+(W-R+6)+'" y="'+(Y(m[3])+4)+'">ref '+f(m[3])+'</text>':'';
+  var lx=X(vals.length-1), ly=Y(vals[vals.length-1]), by=m[3]!==null?Y(m[3]):-99, ty=ly+4; if(Math.abs(ty-by-4)<13) ty=ly+(ly<by?-10:18);
+  $("chart").innerHTML=g+'<path d="'+area+'" fill="var(--accent)" opacity="0.08"/>'+base+'<path d="'+line+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/><circle cx="'+lx+'" cy="'+ly+'" r="4" fill="var(--accent)"/><text x="'+(lx+8)+'" y="'+ty+'" style="fill:var(--ink);font-weight:600">'+f(vals[vals.length-1])+'</text><text x="'+L+'" y="'+(H-8)+'">MD '+data[0].day+'</text><text x="'+(W-R)+'" y="'+(H-8)+'" text-anchor="end">MD '+data[data.length-1].day+'</text>';
+  $("chart").setAttribute("aria-label",m[1]+" over the last "+vals.length+" mission days");
+  $("trendnote").textContent=m[1]+", "+m[2]+(m[3]!==null?". Dashed line is the reference value.":"");
+}
+function fillForm(){
+  var e=entries[entries.length-1];
+  var map={hr:e.hr,sys:e.sys,dia:e.dia,spo2:e.spo2,temp:e.temp,mass:e.mass,sleep:e.sleep,res:e.res,aer:e.aer,dose:Math.min(e.dose,TRANSIT),rt:e.rt};
+  Object.keys(map).forEach(function(k){$("f-"+k).value=map[k]});
+  ["mood","stress"].forEach(function(k){
+    var h="";for(var v=1;v<=5;v++)h+='<label><input type="radio" name="'+k+'" id="'+k+'-'+v+'" value="'+v+'"'+(v===e[k]?" checked":"")+'><span>'+v+'</span></label>';
+    $("seg-"+k).innerHTML=h;
+  });
+  $("chips").innerHTML=SYMPTOMS.map(function(s){return '<label class="chip"><input type="checkbox" id="sym-'+s[0]+'" value="'+s[0]+'"><span>'+s[1]+'</span></label>'}).join("");
+}
+function renderAll(){renderOverview();renderActions();renderTabs();renderChart()}
+function toast(t){var el=$("toast");el.textContent=t;el.classList.add("show");setTimeout(function(){el.classList.remove("show")},2800)}
+function go(id){$(id).scrollIntoView({behavior:still?"auto":"smooth",block:"start"})}
+
+function report(){
+  var i=entries.length-1,s=scores(i),e=entries[i];
+  var t="VITA crew self-report, MD "+e.day+"\nReadiness "+s.overall+"/100 ("+word(level(s.overall))+")\n";
+  SYSTEMS.forEach(function(S){t+="- "+S[1]+": "+s[S[0]]+" ("+word(level(s[S[0]]))+")\n"});
+  t+="Today: HR "+e.hr+" bpm, BP "+e.sys+"/"+e.dia+", SpO2 "+e.spo2+" %, temp "+e.temp+" C, sleep "+e.sleep+" h, exercise "+e.res+"+"+e.aer+" min, dose "+e.dose+" mSv (total "+s.cum.toFixed(0)+" of 600 mSv), mood "+e.mood+"/5, stress "+e.stress+"/5, reaction "+e.rt+" ms\n";
+  if(e.sym.length)t+="Symptoms: "+e.sym.join(", ")+"\n";
+  t+="Flags:\n"; actions(i).forEach(function(a,k){t+=(k+1)+". ["+word(a.sev)+"] "+a.t+"\n"});
+  return t;
+}
+
+document.addEventListener("click",function(ev){var b=ev.target.closest&&ev.target.closest("[data-go]");if(b)go(b.dataset.go)});
+$("tabs").addEventListener("click",function(ev){var b=ev.target.closest("button");if(!b)return;metric=b.dataset.m;renderTabs();renderChart()});
+$("form").addEventListener("submit",function(ev){
+  ev.preventDefault();
+  var keys=["hr","sys","dia","spo2","temp","mass","sleep","res","aer","dose","rt"], e={day:entries[entries.length-1].day+1,sym:[]};
+  for(var k=0;k<keys.length;k++){var inp=$("f-"+keys[k]),v=parseFloat(inp.value);
+    if(isNaN(v)||v<parseFloat(inp.min)||v>parseFloat(inp.max)){toast("Check "+inp.previousElementSibling.textContent+". Allowed range is "+inp.min+" to "+inp.max+".");inp.focus();return}
+    e[keys[k]]=v}
+  e.mood=+(document.querySelector('input[name="mood"]:checked')||{value:3}).value;
+  e.stress=+(document.querySelector('input[name="stress"]:checked')||{value:3}).value;
+  SYMPTOMS.forEach(function(s){if($("sym-"+s[0]).checked)e.sym.push(s[0])});
+  entries.push(e); isDemo=false; save(); renderAll(); fillForm();
+  if(API)api("POST",e).catch(function(){toast("Saved on this device. The database did not answer.")});
+  toast("MD "+e.day+" logged. Scores updated."); go("sec-status");
+});
+$("reset").addEventListener("click",function(){entries=demo();isDemo=true;try{localStorage.removeItem(KEY)}catch(e){};if(API)api("DELETE").then(function(){return api("POST",entries)}).catch(function(){});renderAll();fillForm();toast("Sample data restored.")});
+$("copy").addEventListener("click",function(){
+  var t=report(); $("reportbox").value=t;
+  function fallback(){$("reportwrap").hidden=false;$("reportbox").focus();$("reportbox").select();toast("Select the text below and copy it.")}
+  try{navigator.clipboard.writeText(t).then(function(){toast("Report copied.")},fallback)}catch(e){fallback()}
+});
+
+// alertness test
+(function(){
+  var pad=$("rtpad"),state="idle",times=[],t0=0,timer=null;
+  function arm(){state="wait";pad.className="wait";pad.textContent="Wait… ("+(times.length+1)+" of 5)";timer=setTimeout(function(){state="go";pad.className="go";pad.textContent="TAP";t0=performance.now()},1200+Math.random()*2600)}
+  pad.addEventListener("pointerdown",function(ev){
+    ev.preventDefault();
+    if(state==="idle"){times=[];arm()}
+    else if(state==="wait"){clearTimeout(timer);pad.className="";pad.textContent="Too early. Tap to repeat this round.";state="retry"}
+    else if(state==="retry"){arm()}
+    else if(state==="go"){
+      times.push(performance.now()-t0);
+      if(times.length<5){arm()}
+      else{var s=times.slice().sort(function(a,b){return a-b}),med=Math.round(s[2]);$("f-rt").value=med;state="idle";pad.className="";
+        pad.textContent="Median "+med+" ms, "+(med-BASE.rt>0?"+":"")+(med-BASE.rt)+" against baseline. Tap to run again."}
+    }
+  });
+  pad.addEventListener("keydown",function(ev){if(ev.key===" "||ev.key==="Enter"){ev.preventDefault();pad.dispatchEvent(new PointerEvent("pointerdown"))}});
+})();
+
+// wearable sensors (simulated stream)
+(function(){
+  var on=false,timer=null,pk=0,cur={},cv=$("ecg2"),c=cv.getContext&&cv.getContext("2d"),buf=[],ph=0;
+  function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()}
+  function chain(n){for(var k=1;k<=4;k++)$("c"+k).classList.toggle("on",k<=n)}
+  function state(t,l){var el=$("senstate");el.textContent=t;el.className="tag "+l}
+  function sample(){
+    var e=entries[entries.length-1],j=function(s){return (Math.random()-.5)*s};
+    cur={hr:Math.round(e.hr+2+j(4)),br:Math.round(15+j(3)),spo2:Math.round(Math.min(100,e.spo2+j(1.2))),temp:+(e.temp-2.3+j(.2)).toFixed(1),sys:Math.round(e.sys+j(5)),dia:Math.round(e.dia+j(3)),act:Math.random()<.8?"Rest":"Light"};
+    $("s-hr").textContent=cur.hr;$("s-br").textContent=cur.br;$("s-spo2").textContent=cur.spo2;$("s-temp").textContent=cur.temp.toFixed(1);$("s-bp").textContent=cur.sys+"/"+cur.dia;$("s-act").textContent=cur.act;
+    pk++;$("senpk").textContent="Packet "+pk+" at "+new Date().toLocaleTimeString()+". Simulated signal.";
+  }
+  function beat(x){x=x%1;if(x<.04)return Math.sin(x/.04*Math.PI)*.12;if(x>.1&&x<.13)return -.15;if(x>=.13&&x<.16)return 1;if(x>=.16&&x<.19)return -.35;if(x>.3&&x<.42)return Math.sin((x-.3)/.12*Math.PI)*.22;return 0}
+  function draw(){
+    var W=600,H=96;c.setTransform(2,0,0,2,0,0);c.clearRect(0,0,W,H);
+    c.strokeStyle=css("--line");c.lineWidth=1;for(var x=0;x<W;x+=24){c.beginPath();c.moveTo(x,0);c.lineTo(x,H);c.stroke()}for(var y=0;y<H;y+=24){c.beginPath();c.moveTo(0,y);c.lineTo(W,y);c.stroke()}
+    if(on){var rate=(cur.hr||60)/60/60;for(var s=0;s<2;s++){ph+=rate;buf.push(beat(ph)+(Math.random()-.5)*.03)}}else{buf.push(0,0)}
+    while(buf.length>W)buf.shift();
+    c.strokeStyle=on?css("--ok"):css("--muted");c.lineWidth=1.5;c.beginPath();
+    buf.forEach(function(v,k){var yy=H*.62-v*H*.5;k?c.lineTo(k,yy):c.moveTo(k,yy)});c.stroke();
+    if(!still&&typeof requestAnimationFrame==="function")requestAnimationFrame(draw);
+  }
+  $("senbtn").addEventListener("click",function(){
+    var b=this;
+    if(on){on=false;clearInterval(timer);chain(0);state("Disconnected","plain");b.textContent="Connect sensor shirt";$("senuse").disabled=true;if(still)draw();return}
+    b.disabled=true;b.textContent="Pairing…";state("Pairing","warn");chain(1);
+    setTimeout(function(){chain(2)},500);setTimeout(function(){chain(3)},1000);
+    setTimeout(function(){chain(4);on=true;b.disabled=false;b.textContent="Disconnect";$("senuse").disabled=false;state("Streaming, 2 s interval","ok");sample();timer=setInterval(function(){sample();if(still)draw()},2000)},1500);
+  });
+  $("senuse").addEventListener("click",function(){
+    $("f-hr").value=cur.hr;$("f-spo2").value=cur.spo2;$("f-sys").value=cur.sys;$("f-dia").value=cur.dia;$("f-temp").value=(cur.temp+2.3).toFixed(1);
+    toast("Sensor readings copied into the check-in."); go("sec-log");
+  });
+  if(c)draw();
+})();
+
+load(); renderAll(); fillForm(); syncFromServer();
+})();
+</script>
+</body>
+</html>
