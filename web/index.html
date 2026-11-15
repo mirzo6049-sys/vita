@@ -54,6 +54,7 @@ nav{display:flex;flex-direction:column;gap:2px}
 nav button{font:inherit;text-align:left;border:0;background:transparent;color:var(--ink-2);padding:8px 10px;border-radius:6px;cursor:pointer;font-weight:500}
 nav button:hover{background:var(--fill);color:var(--ink)}
 .mission{margin-top:auto;border-top:1px solid var(--line);padding-top:14px;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px}
+.mission select{font:inherit;font-family:var(--mono);font-size:12.5px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink);padding:1px 2px}
 .mission dt{color:var(--muted)} .mission dd{margin:0;text-align:right;font-family:var(--mono);font-size:12.5px}
 main{padding:28px clamp(16px,3vw,40px) 60px;display:flex;flex-direction:column;gap:18px;max-width:1120px;width:100%}
 .pagehead{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:flex-end;justify-content:space-between}
@@ -188,7 +189,7 @@ footer{font-size:12.5px;color:var(--muted);max-width:76ch}
     <button type="button" class="hide-m" data-go="sec-src">Reference data</button>
   </nav>
   <dl class="mission">
-    <dt>Mission</dt><dd>Mars transit</dd>
+    <dt>Mission</dt><dd><select id="profile" aria-label="Mission phase"><option value="transit">Mars transit</option><option value="surface">Mars surface</option></select></dd>
     <dt>Day</dt><dd id="md">MD 147</dd>
     <dt>Crew</dt><dd>CDR-1</dd>
     <dt>Processing</dt><dd>Onboard</dd>
@@ -308,8 +309,20 @@ footer{font-size:12.5px;color:var(--muted);max-width:76ch}
       <tr><td>Bone density loss without countermeasures</td><td class="v">1–1.5 % / month</td><td><a href="https://www.nasa.gov/reference/risk-of-spaceflight-induced-bone-changes/">NASA, Risk of Spaceflight-Induced Bone Changes</a></td></tr>
       <tr><td>Daily exercise on station</td><td class="v">about 2 h</td><td><a href="https://www.nasa.gov/missions/station/iss-research/counteracting-bone-and-muscle-loss-in-microgravity/">NASA, Counteracting Bone and Muscle Loss</a></td></tr>
       <tr><td>Sleep in flight, scheduled and actual</td><td class="v">8.5 h / 6.09 h</td><td><a href="https://doi.org/10.1016/S1474-4422(14)70122-X">Barger et al., Lancet Neurology, 2014</a></td></tr>
+    <tr><td>Dose rate on the Mars surface</td><td class="v">0.64 mSv/day</td><td><a href="https://www.space.com/23875-mars-radiation-life-manned-mission.html">MSL RAD surface measurement, reported 2013</a></td></tr>
     </tbody></table></div>
-    <div class="small muted">Crew measurements shown in this prototype are simulated around these values. Score weights are our own and need review by flight medicine.</div>
+    <h3>How each score is calculated</h3>
+    <div class="tablewrap"><table>
+    <thead><tr><th>System</th><th>Inputs</th><th>Points lost</th><th>Basis</th></tr></thead>
+    <tbody>
+      <tr><td>Cardiovascular</td><td>7-day resting HR, BP, SpO₂</td><td>3 per bpm above baseline +3; 8 per % SpO₂ below 95</td><td>Change against own preflight baseline</td></tr>
+      <tr><td>Bone and muscle</td><td>7-day resistive and aerobic minutes, body mass</td><td>0.6 per min below 60 resistive; 8 per % mass lost beyond 1 %</td><td>About 2 h daily exercise on ISS; 1–1.5 % bone loss per month</td></tr>
+      <tr><td>Immune</td><td>7-day sleep and stress, temperature, symptoms</td><td>12 per hour below 7 h sleep; 25 per °C above 37.5</td><td>8.5 h scheduled vs about 6 h actual sleep</td></tr>
+      <tr><td>Mind and fatigue</td><td>Mood, stress, 3-day reaction time</td><td>10 per point mood below 3.5; 0.25 per ms slower than baseline +20</td><td>Reaction-time self test against baseline</td></tr>
+      <tr><td>Radiation</td><td>Cumulative and daily dose</td><td>100 × share of 600 mSv used; 10–15 for a spike above 4 mSv/day</td><td>NASA-STD-3001 career and SPE limits</td></tr>
+      <tr><td>Readiness</td><td>All five scores</td><td>60 % mean + 40 % weakest system</td><td>One failing system is never hidden by good averages</td></tr>
+    </tbody></table></div>
+    <div class="small muted">Crew measurements shown in this prototype are simulated around these values. Score weights are the team's own design and need review by flight medicine.</div>
   </div>
 </section>
 
@@ -322,12 +335,16 @@ footer{font-size:12.5px;color:var(--muted);max-width:76ch}
 (function(){
 "use strict";
 var BASE={hr:58,sys:118,dia:76,mass:74.0,rt:265,spo2:98,sleep:8.5};
+var PROFILES={transit:{name:"Mars transit",rate:1.84},surface:{name:"Mars surface",rate:0.64}};
 var LIMIT=600, TRANSIT=1.84, SPIKE=4.0, PRIOR_DOSE=215.3, KEY="vita-entries-v2";
 var SYMPTOMS=[["headache","Headache"],["congestion","Congestion"],["throat","Sore throat"],["rash","Skin rash"],["vision","Blurred vision"],["back","Back pain"],["nausea","Nausea"]];
 var SYSTEMS=[["cardio","Cardiovascular","Heart rate, blood pressure, SpO₂"],["bone","Bone and muscle","Exercise load, body mass"],["immune","Immune","Sleep, stress, temperature, symptoms"],["mind","Mind and fatigue","Mood, stress, reaction time"],["rad","Radiation","Daily and cumulative dose"]];
 var METRICS=[["sleep","Sleep","h",null,1],["hr","Resting HR","bpm",BASE.hr,0],["res","Resistive","min",null,0],["aer","Aerobic","min",null,0],["mood","Mood","/5",null,0],["stress","Stress","/5",null,0],["rt","Reaction","ms",BASE.rt,0],["dose","Dose","mSv",TRANSIT,2],["mass","Mass","kg",BASE.mass,1],["sys","Systolic","mmHg",BASE.sys,0]];
 var TREFOIL='<svg class="thumb" viewBox="-30 -30 60 60" role="img" aria-label="Radiation"><rect x="-30" y="-30" width="60" height="60" fill="#f2c200"/><g fill="#151515" transform="rotate(90)"><circle r="4"/><path d="M6.06 -3.50L19.05 -11.00A22 22 0 0 1 19.05 11.00L6.06 3.50A7 7 0 0 0 6.06 -3.50Z"/><path d="M6.06 -3.50L19.05 -11.00A22 22 0 0 1 19.05 11.00L6.06 3.50A7 7 0 0 0 6.06 -3.50Z" transform="rotate(120)"/><path d="M6.06 -3.50L19.05 -11.00A22 22 0 0 1 19.05 11.00L6.06 3.50A7 7 0 0 0 6.06 -3.50Z" transform="rotate(240)"/></g></svg>';
-var entries=[], isDemo=true, metric="sleep";
+var entries=[], isDemo=true, metric="sleep", profile="transit";
+try{profile=localStorage.getItem("vita-profile")||"transit"}catch(e){}
+if(!PROFILES[profile])profile="transit";
+TRANSIT=PROFILES[profile].rate;
 var $=function(id){return document.getElementById(id)};
 var still=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -342,7 +359,7 @@ function demo(){
       spo2:Math.round(n(97.5,0.6)), temp:+n(36.6,0.15).toFixed(1), mass:+(74-0.02*i-late*0.5+n(0,0.1)).toFixed(1),
       sleep:+Math.max(4,n(7.3-late*1.6,0.35)).toFixed(1),
       res:Math.max(0,Math.round(i>24?n(18,8):n(62,7))), aer:Math.max(0,Math.round(n(55,8))),
-      dose:+(d===139?11.5:Math.max(1.2,n(TRANSIT,0.22))).toFixed(2),
+      dose:+(d===139?11.5:Math.max(TRANSIT*0.65,n(TRANSIT,TRANSIT*0.12))).toFixed(2),
       mood:Math.max(1,Math.min(5,Math.round(n(4.1-late*1.4,0.5)))), stress:Math.max(1,Math.min(5,Math.round(n(1.9+late*1.7,0.5)))),
       rt:Math.round(n(268+late*48,9)), sym:i===28?["headache"]:(i===29?["headache","congestion"]:[])});
   }
@@ -353,7 +370,6 @@ function load(){
   entries=demo(); isDemo=true;
 }
 function save(){try{localStorage.setItem(KEY,JSON.stringify({entries:entries,demo:isDemo}))}catch(e){}}
-// server storage (PostgreSQL via /api). Falls back to the browser when no server answers.
 var API=null;
 function api(method,body){return fetch("/api/checkins",{method:method,headers:{"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined}).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()})}
 function syncFromServer(){
@@ -396,11 +412,11 @@ function actions(i){
   if(has(e,"vision")) add("crit","Vision change reported","Blurred vision in microgravity can be an early sign of spaceflight-associated neuro-ocular syndrome.","Run the onboard eye exam today and send the result to the flight surgeon.");
   if(e.temp>=37.8) add("crit","Fever, "+e.temp.toFixed(1)+" °C","A temperature above 37.8 °C needs attention when immunity is already under load.","Recheck in 2 hours, rest, hydrate, and report to the flight surgeon.");
   if(e.spo2<94) add("crit","Low oxygen saturation, "+e.spo2+" %","SpO₂ below 94 % can point to a cabin atmosphere or respiratory problem.","Recheck with a second sensor and verify cabin O₂ and CO₂ readings.");
-  if(e.dose>SPIKE) add("crit","Radiation spike today, "+e.dose.toFixed(2)+" mSv","That is "+(e.dose/TRANSIT).toFixed(1)+" times the usual transit rate of 1.84 mSv per day and suggests a solar particle event.","Move to the storm shelter and stay there until the dose rate returns to normal.");
+  if(e.dose>SPIKE) add("crit","Radiation spike today, "+e.dose.toFixed(2)+" mSv","That is "+(e.dose/TRANSIT).toFixed(1)+" times the usual "+PROFILES[profile].name.toLowerCase()+" rate of "+TRANSIT+" mSv per day and suggests a solar particle event.","Move to the storm shelter and stay there until the dose rate returns to normal.");
   if(sl<6.5) add(sl<6?"crit":"warn","Sleep debt, 7-day average "+sl.toFixed(1)+" h","Crews are scheduled 8.5 h and average about 6 h in flight. Short sleep lowers immunity and slows reactions.","Protect a full sleep window tonight. Dim cabin lights 1 hour before and skip caffeine after midday.");
   if(hr-BASE.hr>5) add(hr-BASE.hr>10?"crit":"warn","Resting heart rate "+Math.round(hr-BASE.hr)+" bpm above baseline","A sustained rise can reflect fatigue, dehydration, stress, or the start of an illness.","Drink 500 ml of water, recheck after 10 minutes of rest, and report if it stays high for 3 more days.");
   if(res<45) add(res<30?"crit":"warn","Resistive exercise "+Math.round(res)+" min per day, plan is 60","Without loading, bone density falls 1 to 1.5 % per month in microgravity.","Schedule a full resistive session today and book the device for the next 3 days.");
-  if(cum/LIMIT>0.4) add(cum/LIMIT>0.8?"crit":"warn","Cumulative dose at "+pct+" % of career limit","You have received "+cum.toFixed(0)+" of 600 mSv. At the transit rate the limit is about "+Math.max(0,Math.round((LIMIT-cum)/TRANSIT))+" days away.","Sleep and rest in the best-shielded area and review exposure planning with the ground team.");
+  if(cum/LIMIT>0.4) add(cum/LIMIT>0.8?"crit":"warn","Cumulative dose at "+pct+" % of career limit","You have received "+cum.toFixed(0)+" of 600 mSv. At the "+PROFILES[profile].name.toLowerCase()+" rate of "+TRANSIT+" mSv per day the limit is about "+Math.max(0,Math.round((LIMIT-cum)/TRANSIT))+" days away.","Sleep and rest in the best-shielded area and review exposure planning with the ground team.");
   if(rt-BASE.rt>30) add("warn","Reactions "+Math.round(rt-BASE.rt)+" ms slower than baseline","Slower alertness-test results usually follow sleep loss.","Avoid critical manual tasks in the next shift if possible, or ask a crewmate to cross-check.");
   if(st>3.2||mo<3) add((st>4||mo<2.3)?"crit":"warn","Mood "+mo.toFixed(1)+" of 5, stress "+st.toFixed(1)+" of 5 this week","Isolation and confinement build up slowly. A week-long trend matters more than one bad day.","Book a private family call, take 20 minutes of quiet time today, and consider a behavioural health conference.");
   if(has(e,"congestion")||has(e,"throat")||has(e,"rash")) add("warn","Possible immune symptoms","Stress and short sleep in flight can reactivate latent viruses and trigger rashes or congestion.","Log symptoms daily, photograph any rash, and report if they last more than 3 days.");
@@ -476,6 +492,7 @@ function fillForm(){
   });
   $("chips").innerHTML=SYMPTOMS.map(function(s){return '<label class="chip"><input type="checkbox" id="sym-'+s[0]+'" value="'+s[0]+'"><span>'+s[1]+'</span></label>'}).join("");
 }
+function setProfile(p){profile=p;TRANSIT=PROFILES[p].rate;METRICS.forEach(function(m){if(m[0]==="dose")m[3]=TRANSIT});try{localStorage.setItem("vita-profile",p)}catch(e){}if(isDemo){entries=demo()}renderAll();fillForm()}
 function renderAll(){renderOverview();renderActions();renderTabs();renderChart()}
 function toast(t){var el=$("toast");el.textContent=t;el.classList.add("show");setTimeout(function(){el.classList.remove("show")},2800)}
 function go(id){$(id).scrollIntoView({behavior:still?"auto":"smooth",block:"start"})}
@@ -567,6 +584,8 @@ $("copy").addEventListener("click",function(){
   if(c)draw();
 })();
 
+$("profile").value=profile;METRICS.forEach(function(m){if(m[0]==="dose")m[3]=TRANSIT});
+$("profile").addEventListener("change",function(){setProfile(this.value);toast("Reference dose rate set to "+TRANSIT+" mSv per day ("+PROFILES[profile].name+").")});
 load(); renderAll(); fillForm(); syncFromServer();
 })();
 </script>

@@ -2,6 +2,14 @@
 
 Daily health self-check for astronauts on long missions. Team Novacode, NASA Space Apps Challenge 2026, Dushanbe.
 
+## Demo
+
+- 30-second video: [docs/vita-demo-30s.mp4](docs/vita-demo-30s.mp4)
+- Live app: https://claude.ai/artifact/Ka56zAXAya6BwQuoENL3wq
+- Slides (7): https://claude.ai/artifact/JWvDj5B47dRwggz6royhqw
+
+Team Novacode: Mirzorahmat Safarzoda, Idigul Kiyamova.
+
 ## Stack
 
 - `web/` — single-page app (HTML, CSS, JS) and video loops in `web/media/`
@@ -35,5 +43,8 @@ Without a server the page still works and keeps data in the browser.
 ## Notes
 
 - Crew data and the sensor stream are simulated for the demo.
+- Mission phase selector: Mars transit (1.84 mSv/day) or Mars surface (0.64 mSv/day), from MSL RAD.
+- The scoring method is listed in the app under Reference data, with the basis for each rule.
 - Reference values (600 mSv career limit, 1.84 mSv/day transit dose, bone loss, sleep) are listed in the app under Reference data.
-- Built with AI assistance. Research prototype, not a medical device.
+- Built with AI assistance (code, interface text, slides). The body-system video loops in `web/media/` were supplied by the team.
+- Research prototype, not a medical device.
